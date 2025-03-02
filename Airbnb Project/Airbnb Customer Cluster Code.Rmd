@@ -1,0 +1,663 @@
+---
+title: "Untitled"
+output:
+  html_document:
+    df_print: paged
+date: "2024-08-04"
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse = TRUE)
+
+library(regclass)
+library(vip)
+library(dplyr)
+library(tidymodels)
+options(scipen = 999)
+library(lubridate)
+library(nnet)
+library(kknn)
+library(tidyverse)
+
+
+```
+
+
+```{r}
+listings_dictionary <- read.csv("listings_data_dictionary.csv")
+head(listings_dictionary)
+source("https://tiny.utk.edu/scale_dataframe.R") 
+
+
+```
+
+```{r}
+listings <- read.csv("austin_listings.csv")
+
+dim(listings)
+names(listings)
+```
+
+
+
+```{r}
+
+
+
+
+listings$description <- NULL
+listings$picture_url <- NULL
+listings$latitude <- NULL
+listings$longitude <- NULL
+listings$host_id <- NULL
+listings$host_url <- NULL
+listings$listing_url <- NULL
+#listings$host_response_rate <- NULL
+#listings$host_acceptance_rate <- NULL
+listings$name <- NULL
+listings$room_type <- NULL
+listings$host_name <- NULL
+listings$zip_code <- NULL
+listings$host_since <- NULL
+listings$host_response_time <- NULL
+listings$id <- NULL
+colSums(is.na(listings))
+
+listings$bathrooms[is.na(listings$bathrooms)] <- mean(listings$bathrooms, na.rm = TRUE)
+listings$beds[is.na(listings$beds)] <- mean(listings$beds, na.rm = TRUE)
+listings$bedrooms[is.na(listings$bedrooms)] <- mean(listings$bedrooms, na.rm = TRUE)
+listings$overall_rating[is.na(listings$overall_rating)] <- mean(listings$overall_rating, na.rm = TRUE)
+listings$host_response_rate[is.na(listings$host_response_rate)] <- mean(listings$host_response_rate, na.rm = TRUE)
+listings$host_acceptance_rate[is.na(listings$host_acceptance_rate)] <- mean(listings$host_acceptance_rate, na.rm = TRUE)
+
+scale_listings <- scale_dataframe(listings)
+head(scale_listings)
+
+#listings_scaled <- listings
+
+#listings_scaled$price <- log10(listings_scaled$price+1)
+#listings_scaled$number_of_reviews <- log10(listings_scaled$number_of_reviews+1)
+#listings_scaled$accommodates <- log10(listings_scaled$accommodates+1)
+#listings_scaled$bathrooms <- log10(listings_scaled$bathrooms+1)
+#listings_scaled$bedrooms <- log10(listings_scaled$bedrooms+1)
+#listings_scaled$bathrooms <- log10(listings_scaled$bathrooms+1)
+#listings_scaled$beds <- (log10(listings_scaled$beds+1))
+#listings_scaled$minimum_nights <- log10(listings_scaled$minimum_nights+1)
+#listings_scaled$host_total_listings_count <- log10(listings_scaled$host_total_listings_count+1)
+
+
+#hist(log10(listings$price+1))
+#hist(log10(listings$number_of_reviews+1))
+#hist(log10(listings$accommodates+1))
+#hist(log10(listings$bathrooms+1))
+#hist(log10(listings$bedrooms+1))
+#hist(log10(listings$beds+1))
+#hist(log10(listings$minimum_nights+1))
+#hist(listings$overall_rating)
+#hist(listings$host_response_rate)
+#hist(listings$host_acceptance_rate)
+#hist(log10(listings$host_total_listings_count+1))
+
+plot(price~number_of_reviews, data = listings)
+plot(price~overall_rating, data = listings)
+
+
+
+```
+
+
+
+
+```{r}
+
+
+
+
+
+#changed data type of date of host_since to character to match
+#holdout_x$host_since <- as.character(holdout_x$host_since)
+
+holdout_x <- read.csv("holdout_x.csv")
+
+holdout_x$description <- NULL
+holdout_x$picture_url <- NULL
+holdout_x$latitude <- NULL
+holdout_x$longitude <- NULL
+holdout_x$host_id <- NULL
+holdout_x$host_url <- NULL
+holdout_x$listing_url <- NULL
+#listings$host_response_rate <- NULL
+#listings$host_acceptance_rate <- NULL
+holdout_x$name <- NULL
+holdout_x$host_since <- NULL
+holdout_x$host_response_time <- NULL
+holdout_x$room_type <- NULL
+holdout_x$host_name <- NULL
+holdout_x$zip_code <- NULL
+
+
+
+#replaced NAs with mean...
+holdout_x$bathrooms[is.na(holdout_x$bathrooms)] <- mean(holdout_x$bathrooms, na.rm = TRUE)
+holdout_x$beds[is.na(holdout_x$beds)] <- mean(holdout_x$beds, na.rm = TRUE)
+holdout_x$bedrooms[is.na(holdout_x$bedrooms)] <- mean(holdout_x$bedrooms, na.rm = TRUE)
+holdout_x$overall_rating[is.na(holdout_x$overall_rating)] <- mean(holdout_x$overall_rating, na.rm = TRUE)
+holdout_x$host_response_rate[is.na(holdout_x$host_response_rate)] <- mean(holdout_x$host_response_rate, na.rm = TRUE)
+holdout_x$host_acceptance_rate[is.na(holdout_x$host_acceptance_rate)] <- mean(holdout_x$host_acceptance_rate, na.rm = TRUE)
+
+
+
+
+#holdout_x$price <- log10(holdout_x$price+1)
+#holdout_x$number_of_reviews <- log10(holdout_x$number_of_reviews+1)
+#holdout_x$accommodates <- log10(holdout_x$accommodates+1)
+#holdout_x$bathrooms <- log10(holdout_x$bathrooms+1)
+#holdout_x$bedrooms <- log10(holdout_x$bedrooms+1)
+#holdout_x$bathrooms <- log10(holdout_x$bathrooms+1)
+#holdout_x$beds <- (log10(holdout_x$beds+1))
+#holdout_x$minimum_nights <- log10(holdout_x$minimum_nights+1)
+#holdout_x$host_total_listings_count <- log10(holdout_x$host_total_listings_count+1)
+
+
+```
+
+
+```{r}
+
+#k-means and clustering below 
+
+
+#clusters of price ~ bedrooms
+
+listings_price_bedrooms <- listings[, c("price", "bedrooms")]
+
+set.seed(123)
+kmeans_bedrooms_3clst <- kmeans(listings_price_bedrooms, centers = 3, nstart = 20)
+kmeans_bedrooms_3clst
+
+
+# after adding 4 clusters it seems helpful....
+
+set.seed(123)
+kmeans_bedrooms_4clst <- kmeans(listings_price_bedrooms, centers = 4, nstart = 20)
+kmeans_bedrooms_4clst
+
+# clusters formed of more bedrooms -> higher prices
+
+
+#clusters of price ~ # of reviews
+
+listings_price_reviews <- listings[, c("price", "number_of_reviews")]
+
+set.seed(123)
+kmeans_reviews <- kmeans(listings_price_reviews, centers = 3, nstart = 20)
+kmeans_reviews
+
+# clusters formed of more reviews -> lower prices 
+
+
+# clusters of price ~ rating
+
+listings_price_rating <- listings[, c("price", "overall_rating")]
+
+
+set.seed(123)
+kmeans_rating <- kmeans(listings_price_rating, centers = 3, nstart = 20)
+kmeans_rating
+
+# didn't find any major differences between these clusters....
+
+#drops 2k rows 
+#listings <- listings[complete.cases(listings),]
+
+
+#why error...
+# does it all have to be numeric 
+#listings$room_type <- as.numeric(listings$room_type)
+#listings$beds <- as.numeric(listings$beds)
+#listings$accommodates <- as.numeric(listings$accommodates)
+#istings$beds <- as.numeric(listings$minimum_nights)
+
+
+colSums(is.na(listings))
+
+#Error in do_one(nmeth) : NA/NaN/Inf in foreign function call (arg 1) when doing scaled 
+set.seed(123)
+kmeans_all_scaled <- kmeans(scale_listings, centers = 6, nstart = 20)
+t(kmeans_all_scaled$centers)
+
+
+# pasting in excel to use conditional formating 
+# code in homework for plotting
+
+
+
+#plot stuff
+plot_df <- data.frame(t(kmeans_all_scaled$centers))
+names(plot_df) <- paste0("Cluster", 1:6)
+plot_df <- plot_df %>%
+  select(Cluster2,Cluster4, Cluster6)
+plot_df$category <- rownames(plot_df)
+plot_df <- pivot_longer(plot_df, cols = -category)
+
+ 
+ggplot(plot_df, aes(x = name, y = category, fill = value)) +
+  geom_tile(color = "pink") +
+  geom_text(aes(label = round(value, 2)), color = "white") +
+  scale_fill_gradient(low = "pink", high = "#FF5A5F") +
+  labs(x = "", y = "")  +
+theme_minimal() + # Use a minimal theme
+  theme(
+    panel.background = element_rect(fill = "darkgray", color = NA), plot.background = element_rect(fill = "darkgray", color = NA) # Gray background for the panel
+)
+
+
+```
+```{r}
+
+```
+
+```{r}
+
+# going to find elbow plot... what's our ideal 'k'?
+
+WCSS_rating <- c()
+for (a in 1:20) {
+  clst_rating <- kmeans(
+    x = listings_price_rating, 
+    centers = a, 
+    iter.max = 30, 
+    nstart = 25
+    )
+  WCSS_rating[a] <- clst_rating$tot.withinss
+}
+
+plot(WCSS_rating, xlim=c(0,20))
+
+
+WCSS_reviews <- c()
+for (b in 1:20) {
+  clst_reviews <- kmeans(
+    x = listings_price_reviews, 
+    centers = b, 
+    iter.max = 30, 
+    nstart = 25
+    )
+  WCSS_reviews[b] <- clst_reviews$tot.withinss
+}
+
+plot(WCSS_reviews, xlim=c(0,20))
+
+
+# above gives three clusters below gives 4 clusters...
+
+WCSS_bedrooms <- c()
+for (c in 1:20) {
+  clst_bedrooms <- kmeans(
+    x = listings_price_bedrooms, 
+    centers = c, 
+    iter.max = 30, 
+    nstart = 25
+    )
+  WCSS_bedrooms[c] <- clst_bedrooms$tot.withinss
+}
+
+#wanted to put sequence in xlim argument to change what it goes by 
+plot(WCSS_bedrooms, xlim=c(0,20))
+
+
+#cluster on features at once - hw 5 
+
+
+WCSS_all <- c()
+for (d in 1:20) {
+  clst_all <- kmeans(
+    x = scale_listings, 
+    centers = d, 
+    iter.max = 30, 
+    nstart = 25
+    )
+  WCSS_all[d] <- clst_all$tot.withinss
+}
+
+#wanted to put sequence in xlim argument to change what it goes by 
+plot(WCSS_all, xlim=c(0,20))
+
+
+
+```
+
+
+```{r}
+
+
+# creating train and test data with 75/25 split
+
+split <- initial_split(listings, prop = 0.75)
+
+listings_train <- training(split)
+listings_test <- testing(split)
+
+# dim of each split
+dim(listings_train) 
+dim(listings_test) 
+
+
+
+```
+
+
+
+```{r}
+
+recipe <- recipe(price ~ ., data = listings) %>%
+  step_YeoJohnson(all_numeric_predictors()) %>%
+  step_novel(all_nominal_predictors()) %>%
+  #creates dummy variables out of all factor variables/predictors
+  step_dummy(all_nominal_predictors()) %>%
+  #removes predictors with little or no information
+  step_nzv(all_numeric_predictors()) %>%
+  step_corr(all_numeric_predictors()) %>%
+  step_lincomb()
+
+
+#%>%
+  #step_meanimpute(all_numeric()) %>%
+  #step_modeimpute(all_nominal())
+
+
+
+recipe
+
+```
+
+
+
+```{r}
+#setup model
+lr_model <- linear_reg() %>%
+  set_engine("lm") %>%
+  set_mode("regression")
+
+lr_model
+
+#setup workflow
+lr_workflow <- workflow() %>%
+  add_recipe(recipe) %>%
+  add_model(lr_model)
+
+```
+
+
+
+
+```{r}
+#fitting the model
+lr_fit <-
+  lr_workflow %>%
+  fit(data = listings_train)
+
+#tidy models data steps - recipe in 
+
+
+```
+
+
+```{r}
+
+extracted_fit <- lr_fit %>%
+  extract_fit_parsnip()
+
+summary(extracted_fit$fit)
+
+#can see which predictors have the most impact on price based upon the coefficients... as well as the vip...
+vip(lr_fit)
+
+
+
+```
+
+
+
+```{r}
+
+#making predictions
+
+
+# dont share data cleaning
+
+#gives me error any time i use holdout_x as the new data as well as listings_test... what to do?
+predictions <- predict(lr_fit, new_data = holdout_x)
+
+
+
+adhoc <- lr_fit %>%
+  predict(new_data = holdout_x ) %>%
+  bind_cols(holdout_x) %>%
+  select(id, price = .pred) 
+  #purpose of bind cols - adds - diff from join bc doesnt line up rows but assumes order correct
+write.csv(adhoc,"linear regression.csv", row.names = FALSE)
+
+# fill NA with avg price in train 
+ # adhoc$price[is.na(holdout_x$price)] = mean(listings$train)
+
+ # to prevetn NA make sure no NA in holdout 
+#  apply same cleaning as trainign data
+ colSums(is.na(holdout_x))
+ 
+
+# rmse
+# price column does not exist 
+# metrics(adhoc, truth = price, estimate = .pred)
+
+
+```
+
+```{r}
+
+# try linear reg glmnet engine regression next
+
+# recipe %>%
+ #  prep()
+
+
+
+# set up glmnet model
+listings_glmnet <- linear_reg(
+  engine = "glmnet",
+  mixture = tune(),
+  penalty = tune()
+)
+
+
+# set up glmnet workflow
+listings_glmnet_workflow <- workflow() %>%
+  add_recipe(recipe) %>%
+  add_model(listings_glmnet)
+
+#set up grid
+glmnet_grid <- grid_regular(
+  penalty(),
+  mixture(), 
+  levels = 10
+)
+
+# five cv
+set.seed(42)  
+folds <- vfold_cv(listings_train, v = 10)
+
+#tune
+tune_glmnet_results <- tune_grid(    
+  listings_glmnet_workflow,
+  resamples = folds,
+  grid = glmnet_grid
+)
+
+
+# see best params
+best_params_glmnet <- select_best(tune_glmnet_results, metric = "rmse")
+best_params_glmnet
+
+
+#finalize using best cv params
+final_glmnet_workflow <- finalize_workflow(listings_glmnet_workflow, best_params_glmnet)
+
+
+#fit final workflow
+fit_final_glmnet_workflow <- 
+  final_glmnet_workflow %>%
+  fit(data = listings_train)
+
+#show coefficients in fit model 
+
+fit_final_glmnet_workflow %>% 
+  tidy() %>% 
+  select(term, estimate)
+
+
+
+```
+
+```{r}
+
+holdout_glmnet_preds <- fit_final_glmnet_workflow %>% 
+  predict(new_data = holdout_x) %>% 
+  bind_cols(holdout_x) %>%
+select(id, price = .pred)
+  #purpose of bind cols - adds - diff from join bc doesnt line up rows but assumes order correct
+write.csv(holdout_glmnet_preds,"glmnet.csv", row.names = FALSE)
+
+
+#price doesnt exist
+#holdout_glmnet_preds %>% 
+ # metrics(truth = price, estimate = .pred)
+
+
+
+```
+
+
+```{r}
+# decision tree attempt 
+
+
+
+listings_boost <- boost_tree(
+  mode = "regression",
+  mtry = 16,
+  trees = 10000,
+  tree_depth = 4,
+  learn_rate = 0.1
+)
+
+boost_workflow <- workflow() %>% 
+  add_recipe(recipe) %>% 
+  add_model(listings_boost)
+
+fit_boost <- boost_workflow %>% 
+  fit(listings_train)
+
+holdout_boost_preds <- fit_boost %>% 
+  predict(new_data = holdout_x) %>% 
+  bind_cols(holdout_x) %>%
+select(id, price = .pred)
+write.csv(holdout_boost_preds,"boost.csv", row.names = FALSE)
+
+vip_plot <- vip(fit_boost)
+
+# contect of giving to aribnb. host - dont lose cust
+library(ggplot2)
+library(xgboost)
+
+# Modify the ggplot object
+vip_plot +
+  theme_minimal() +
+  scale_fill_manual(aesthetics = "pink") + # Gradient colors
+  scale_color_manual(values = c("pink", "pink")) + # Border colors if applicable
+  labs(title = "Airbnb Variable Importance Plot") +
+  theme(
+    plot.title = element_text(size = 14, face = "bold"),
+    legend.position = "bottom" # Adjust legend position if needed
+  )
+```
+
+```{r}
+
+
+#nnet
+
+nnet <- mlp(
+  mode = "regression",
+  hidden_units = tune()
+)
+
+
+nnet_workflow <- workflow() %>%
+  add_recipe(recipe) %>%
+  add_model(nnet)
+
+nnet_grid <- grid_regular(
+  hidden_units(), 
+  levels = 5
+)
+
+folds <- vfold_cv(listings_train, v = 5)
+
+
+nnet_results <- tune_grid(
+  nnet_workflow, 
+  resamples = folds, 
+  grid = nnet_grid,
+  control = control_grid(verbose = TRUE)
+)
+
+# see best params
+best_params_nnet <- select_best(nnet_results, metric = "rmse")
+best_params_nnet
+
+
+#finalize using best cv params
+final_nnet_workflow <- finalize_workflow(nnet_workflow, best_params_nnet)
+
+
+#fit final workflow
+fit_final_nnet_workflow <- 
+  final_nnet_workflow %>%
+  fit(data = listings_train)
+
+#show coefficients in fit model 
+
+
+
+holdout_nnet_preds <- fit_final_nnet_workflow %>% 
+  predict(new_data = holdout_x) %>% 
+  bind_cols(holdout_x) %>%
+select(id, price = .pred)
+  #purpose of bind cols - adds - diff from join bc doesnt line up rows but assumes order correct
+write.csv(holdout_glmnet_preds,"nnet.csv", row.names = FALSE)
+
+
+
+hidden_units_cv_metrics <- nnet_results %>%
+  collect_metrics() %>%
+  filter(.metric == "rmse") %>%
+  arrange(mean)
+
+hidden_units_cv_metrics
+
+hidden_units_cv_metrics %>%
+  ggplot(aes(x=hidden_units, y=mean)) +
+  geom_point() +
+  geom_line()
+
+
+
+
+
+
+```
+
+
+```
+
+
+
