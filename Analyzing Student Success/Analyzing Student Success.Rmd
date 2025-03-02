@@ -1,0 +1,545 @@
+---
+title: "Case 8"
+output: html_document
+date: "2024-11-13"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+# command option I for new chunk
+
+# for data manipulation
+library(tidyverse)
+
+# regression class package from 320 by petrie
+library(regclass)
+
+# for string manipulation
+library(stringr)
+
+# for creating connecting letters report
+library(multcompView)
+
+# for applying market basket anaylsis
+library(arules)
+
+# for model building, partial dependence, and breakdown plots
+library(DALEX)
+library(caret)
+library(gbm)
+library(randomForest)
+library(pROC)
+
+
+# Reading helper functions from a "GitHub Gist"
+# full URL shortened to have a cleaner looking line of code
+my_file_path <- "https://bit.ly/drivers-helpers"
+
+# The source function just needs you to point it at an R file
+source(my_file_path)
+
+#* `replace_rare_levels` - helps clean categorical columns
+#* `examine_driver_Ycat` - helps analyze main drivers for a *categorical* response variable
+#* `examine_driver_Ynumeric` - helps analyze main drivers for a *numeric* response variable
+
+
+```
+
+```{r}
+Students_Performance <- read.csv("StudentsPerformance.csv",stringsAsFactors = TRUE)
+
+view(Students_Performance)
+head(Students_Performance)
+
+
+
+#Define Success so that around 15-20% or so of students are successful
+#Come up with your own, this is just an example
+Students_Performance$Success <- factor(ifelse( Students_Performance$reading.score > 75 & Students_Performance$writing.score > 75 & Students_Performance$math.score > 75,"Yes","No" ) )
+mean(Students_Performance$Success=="Yes")
+# 18.8%
+
+
+#Eliminate scores (they aren't known obviously before test is taken)
+Students_Performance$math.score <- NULL
+Students_Performance$reading.score <- NULL
+Students_Performance$writing.score <- NULL
+```
+
+```{r}
+Students_Performance$parental.level.of.education <- factor(
+  Students_Performance$parental.level.of.education,
+  levels = c("some high school", "high school", "some college", "associate's degree", "bachelor's degree", "master's degree")
+)
+
+
+```
+
+```{r}
+
+TREE <- rpart(Success ~ ., data = Students_Performance,cp=0,minbucket=20)
+summarize_tree(TREE)
+TREE$cptable #Fine to leave cp=0
+visualize_model(TREE)
+
+```
+
+
+```{r}
+
+#Make special datasets for examining partial dependence plots, interactions, and breakdown plots 
+TRAIN.PREDICTORS <- Students_Performance
+TRAIN.PREDICTORS$Success <- NULL
+TRAIN.TARGET <- as.numeric(Students_Performance$Success=="Yes")
+
+```
+
+
+```{r}
+#Estimating generalization error (build on a 70% training set and evaluate on a 30% holdout sample
+#Normally this is done with K-fold crossvalidation and caret, but this is faster!
+#Drawback:  only one guess of the generalization error! 
+DATA <- Students_Performance
+y <- "Success"
+set.seed(479); train.rows <- sample(1:nrow(DATA),0.7*nrow(DATA))
+MODEL <- randomForest(formula(paste(y,"~.")),data=DATA[train.rows,])
+#Estimated accuracy on holdout sample (one measure of generalization error)
+postResample(predict(MODEL,newdata=DATA[-train.rows,]),DATA[-train.rows,y] )
+#Accuracy on holdout if predicted everything as the majority class (naive model)
+max(table(DATA[-train.rows,y])/nrow(DATA[-train.rows,]))
+#Estimated AUC on holdout sample (one measure of generalization error); 0.5 is random guessing, 1 is perfect
+roc(DATA[-train.rows,y], predict(MODEL,newdata=DATA[-train.rows,],type="prob")[,2] )
+
+```
+
+
+
+```{r}
+#Building an explainer with a random forest
+library(randomForest)
+FOREST <- randomForest(Success~.,data=Students_Performance)
+summarize_tree(FOREST)
+model_explainer <- DALEX::explain(FOREST, data = TRAIN.PREDICTORS,  y = TRAIN.TARGET)
+model_vi <- model_parts(model_explainer, loss_function = loss_one_minus_auc)
+plot(model_vi)
+model_vi
+```
+
+```{r}
+model_explainer$data$parental.level.of.education <- factor(
+  model_explainer$data$parental.level.of.education,
+  levels = c("some high school", "high school", "some college", "associate's degree", "bachelor's degree", "master's degree")  # Desired order
+)
+
+```
+
+
+```{r}
+FOREST <- randomForest(Success ~ ., data = Students_Performance)
+
+# Summarize the model structure (optional, for deeper understanding)
+# summarize_tree(FOREST) # Uncomment if you have this function available
+
+# Create the explainer with added customization for label and color
+model_explainer <- DALEX::explain(
+  FOREST,
+  data = TRAIN.PREDICTORS,
+  y = TRAIN.TARGET,
+  label = "RANDOM"
+)
+
+# Compute variable importance with customization (top 10 variables, AUC loss function)
+model_vi <- model_parts(model_explainer, loss_function = loss_one_minus_auc)
+
+# Print a summary of the variable importance
+summary(model_vi)
+
+# Plot the variable importance with custom titles and theme
+# Plot with custom title and gray background, removing the default label
+vi_plot <- plot(model_vi) +
+  ggtitle("Top 10 Feature Importances - Random Forest Model (AUC)") +  # Custom title
+  theme_minimal() +
+  labs(x = "Features", y = "Contribution to Model's Accuracy") +
+  scale_fill_manual(values = c("#4CAF50", "#FFC107", "#F44336")) +
+  theme(
+    legend.position = "none",         # Removes the legend
+    plot.background = element_rect(fill = "gray90", color = NA), # Gray plot background
+    panel.background = element_rect(fill = "gray90", color = NA), # Gray panel background
+    panel.grid.major = element_line(color = "gray80"),            # Light gray grid lines
+    panel.grid.minor = element_blank(),                            # No minor grid lines
+   
+  )
+
+
+
+
+# Display the plot
+print(vi_plot)
+
+# Display variable importance data if needed
+model_vi
+
+
+
+
+
+
+
+```
+
+
+```{r}
+model_explainer$data  
+
+
+
+#Partial dependence plots 
+numerics <- which( unlist(lapply(Students_Performance,function(x)tail(class(x),1))) %in% c("numeric","integer") ); names(Students_Performance)[numerics]
+cats <- which( unlist(lapply(Students_Performance,function(x)tail(class(x),1))) %in% c("factor","character") ); names(Students_Performance)[cats]
+
+#cat(paste('plot( model_profile(model_explainer,type = "partial", variables = "',names(Students_performance)[cats],'"))\n',sep=""))
+#plot(model_profile (model_explainer, type = "partial", variables = "gender"))
+#plot( model_profile(model_explainer,type = "partial", variables = "race.ethnicity"))
+```
+
+
+```{r}
+partial_parenteducation <- plot( model_profile(model_explainer,type = "partial", variables = "parental.level.of.education"))  + 
+  theme_minimal() +  # Clean minimal theme
+  theme(
+    legend.position = "top",         
+    plot.background = element_rect(fill = "gray90", color = NA), # Gray plot background
+    panel.background = element_rect(fill = "gray90", color = NA), # Gray panel background
+    panel.grid.major = element_line(color = "gray80"),            # Light gray grid lines
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(hjust = 0.5, size = 14),  # Center and resize the title
+    plot.margin = margin(10, 20, 10, 20),
+    axis.title.x = element_text(margin = margin(t = 20)), 
+    axis.title.y = element_text(margin = margin(r = 20)),
+    axis.text.x = element_text(margin = margin(t = 15), size = 8),# Adjust the plot margins (top, right, bottom, left)
+
+  
+  ) + 
+  labs(
+    title = "Parental Level of Education", 
+    x = "Level of Education", 
+    y = "Course Competion Status") + 
+  scale_fill_manual(
+    values = c(
+      "some high school" = "#FFB74D",   # Light Orange
+      "high school" = "#FF7043",        # Orange
+      "some college" = "#388E3C",        # Green
+      "associate's degree" = "#1976D2",  # Blue
+      "bachelor's degree" = "#0288D1",   # Bright Blue
+      "master's degree" = "#1565C0"      # Dark Blue
+    )
+  )
+ 
+
+# Renaming the factor levels before plotting
+#model_explainer$test.preparation.course <- factor(model_explainer$test.preparation.course, 
+                                                  # levels = c("completed", "none"), 
+                                                  # labels = c("Completed Course", "No Course"))
+plot(partial_parenteducation)
+
+
+levels(model_explainer$data$parental.level.of.education)
+levels(Students_Performance$parental.level.of.education)
+
+```
+
+
+```{r}
+plot( model_profile(model_explainer,type = "partial", variables = "test.preparation.course")) +
+  ggtitle("Partial Dependence - Parental Level of Education") +  # Custom title
+  theme_minimal() +
+  labs(x = "Test Preparation Course Status", y = "Predicted Student Success") +
+  scale_fill_manual(values = c("#4CAF50", "#FFC107", "#F44336")) +
+  theme(
+    legend.position = "none",         # Removes the legend
+    plot.background = element_rect(fill = "gray90", color = NA), # Gray plot background
+    panel.background = element_rect(fill = "gray90", color = NA), # Gray panel background
+    panel.grid.major = element_line(color = "gray80"),            # Light gray grid lines
+    panel.grid.minor = element_blank(),
+    plot.margin = margin(20, 25, 20, 25), 
+    axis.title.x = element_text(margin = margin(t = 20)), 
+    axis.title.y = element_text(margin = margin(r = 20)),
+    axis.text.x = element_text(margin = margin(t = 15), size = 10),
+   
+  )
+
+
+plot( model_profile(model_explainer,type = "partial", variables = "lunch"))
+plot( model_profile(model_explainer,type = "partial", variables = "test.preparation.course"))
+```
+
+```{r}
+new_data <- data.frame(
+  gender = factor("female", levels = levels(Students_Performance$gender)),
+  race.ethnicity = factor("group B", levels = levels(Students_Performance$race.ethnicity)),
+  parental.level.of.education = factor("associate's degree", levels = levels(Students_Performance$parental.level.of.education)),
+  lunch = factor("standard", levels = levels(Students_Performance$lunch)),
+  test.preparation.course = factor("none", levels = levels(Students_Performance$test.preparation.course))
+)
+
+predict(FOREST, new_data, type = "response")
+```
+
+```{r}
+#Examine interaction between num/cat or cat/cat variables (see variables in numerics and cats created above)
+
+set.seed(2022); levelofeducation_by_coursecompletion <- model_profile(explainer = model_explainer, 
+                                               variables = c("parental.level.of.education"), 
+                                               groups = "test.preparation.course", type = "partial")  
+
+plot(levelofeducation_by_coursecompletion)
+
+
+vi_plot2 <- plot(levelofeducation_by_coursecompletion) + 
+  theme_minimal() +  # Clean minimal theme
+  theme(
+    legend.position = "top",         
+    plot.background = element_rect(fill = "gray90", color = NA), # Gray plot background
+    panel.background = element_rect(fill = "gray90", color = NA), # Gray panel background
+    panel.grid.major = element_line(color = "gray80"),            # Light gray grid lines
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(hjust = 0.5, size = 14),  # Center and resize the title
+    plot.margin = margin(10, 20, 10, 20),
+    axis.title.x = element_text(margin = margin(t = 20)), 
+    axis.title.y = element_text(margin = margin(r = 20)),
+    axis.text.x = element_text(margin = margin(t = 15), size = 8),# Adjust the plot margins (top, right, bottom, left)
+
+  
+  ) + 
+  labs(
+    title = "Parental Level of Education by Test Preparation Course", 
+    x = "Parental Level of Education", 
+    y = "Course Competion Status") + 
+   scale_fill_manual(
+    values = c(
+      "RANDOM_completed" = "#0276D8",
+      "RANDOM_none" = "#33B5B5" # Darkest blue for master's degree
+    )
+  )  # Custom colors
+
+  
+
+# Display the plot
+
+print(vi_plot2)
+```
+
+
+```{r}
+#Second One
+
+Students_Performance$parental.level.of.education <- factor(
+  Students_Performance$parental.level.of.education,
+  levels = c("some high school", "high school", "some college", "associate's degree", "bachelor's degree", "master's degree")
+)
+
+model_explainer$data$parental.level.of.education <- factor(
+  model_explainer$data$parental.level.of.education,
+  levels = c("some high school", "high school", "some college", "associate's degree", "bachelor's degree", "master's degree")  # Desired order
+)
+
+
+
+  
+# is there a certain race with more barrier of entry for a certain level of education and thus continuing a 
+# cycle of adequate resources aka lack of test prep and lower test scores continuning cycle'
+
+set.seed(2022); race_by_levelofeducation <- model_profile(explainer = model_explainer, 
+                                               variables = c("parental.level.of.education"), 
+                                               groups = "lunch", type = "partial") 
+                                              
+  
+
+
+vi_plot3 <- plot(race_by_levelofeducation) + 
+  theme_minimal() +  # Clean minimal theme
+  theme(
+    legend.position = "bottom",         
+    plot.background = element_rect(fill = "gray90", color = NA), # Gray plot background
+    panel.background = element_rect(fill = "gray90", color = NA), # Gray panel background
+    panel.grid.major = element_line(color = "gray80"),            # Light gray grid lines
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(hjust = 0.5, size = 14),  # Center and resize the title
+    plot.margin = margin(10, 20, 10, 20),
+    axis.title.x = element_text(margin = margin(t = 20)), 
+    axis.title.y = element_text(margin = margin(r = 20)),
+    axis.text.x = element_text(margin = margin(t = 15), size = 8),# Adjust the plot margins (top, right, bottom, left)
+
+  
+  ) + 
+  labs(
+    title = "Parental Level of Education by Lunch Status", 
+    x = "Parent's Education", 
+    #find more info on what this actually represents
+    y = "Average" ) # +
+ # scale_fill_manual(
+   # values = c(
+     # "RANDOM_free/reduced" = "#B3E5FC",
+      #"RANDOM_standard" = "#81D4FA",    
+   # )
+ # )  # Custom colors
+
+# Display the plot
+
+print(vi_plot3)
+```
+
+```{r}
+
+  
+# is there a certain race with more barrier of entry for a certain level of education and thus continuing a 
+# cycle of adequate resources aka lack of test prep and lower test scores continuning cycle'
+
+table(Students_Performance$parental.level.of.education)
+
+table(Students_Performance$race.ethnicity)
+
+```
+
+```{r}
+# Count the number of records in each 'parental.level.of.education' category
+table(model_explainer$data$parental.level.of.education)
+# not an even pool....
+
+
+
+# TABLE BELOW... point this out... ask if you point this out how does it impact findings?
+
+# If you prefer using dplyr
+library(dplyr)
+
+# Count records by 'parental.level.of.education' category
+education_count_df <- model_explainer$data %>%
+  count(parental.level.of.education)
+
+# Display the table
+print(education_count_df)
+
+
+```
+
+
+```{r}
+#Breakdown plot showing how particular prediction is pieced together
+#Choose two types of rows that tell a good story
+predictions <- predict(FOREST,type="prob")[,2] #Get predicted probability of each row
+which(predictions >= quantile(predictions,.99))  #Some of the rows with highest probabilities
+which(predictions >= quantile(predictions,.49) & predictions <= quantile(predictions,.51))  #Some of the rows with typical value of y
+which(predictions <= quantile(predictions,.01))  #Some of the rows with highest y
+specific.row <- Students_Performance[111,]  
+#The predict_parts can take a long time for big datasets doing classifications
+plot( predict_parts(explainer = model_explainer, new_observation = specific.row, type = "break_down") )
+```
+```{r}
+# Step 1: Get predictions from the random forest model
+predictions <- predict(FOREST, type = "prob")[, 2]  # Get predicted probabilities for the positive class
+
+# Step 2: Identify rows of interest based on quantiles
+high_prob_index <- which(predictions >= quantile(predictions, 0.99))[1]  # Row with high predicted probability (top 1%)
+low_prob_index <- which(predictions <= quantile(predictions, 0.01))[1]   # Row with low predicted probability (bottom 1%)
+
+# Step 3: Extract the selected rows from the dataset
+high_prob_row <- Students_Performance[high_prob_index, ]
+low_prob_row <- Students_Performance[low_prob_index, ]
+
+# Step 4: Generate breakdown plots for the selected rows
+
+# Breakdown plot for the high probability row
+high_prob_breakdown <- predict_parts(
+  explainer = model_explainer, 
+  new_observation = high_prob_row, 
+  type = "break_down"
+)
+
+# Breakdown plot for the low probability row
+low_prob_breakdown <- predict_parts(
+  explainer = model_explainer, 
+  new_observation = low_prob_row, 
+  type = "break_down"
+)
+
+# Plot for high probability row
+high_prob_plot <- plot(high_prob_breakdown) +
+  theme_minimal() +  # Clean minimal theme
+  theme(
+    legend.position = "NULL",         
+    plot.background = element_rect(fill = "gray90", color = NA), # Gray plot background
+    panel.background = element_rect(fill = "gray90", color = NA), # Gray panel background
+    panel.grid.major = element_line(color = "gray80"),            # Light gray grid lines
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(hjust = 0.5, size = 14),  # Center and resize the title
+    plot.margin = margin(10, 20, 10, 20),
+    axis.title.x = element_text(margin = margin(t = 20)), 
+    axis.title.y = element_text(margin = margin(r = 5)),
+    axis.text.x = element_text(margin = margin(t = 15), size = 8),# Adjust the plot margins (top, right, bottom, left)
+
+  
+  ) + 
+  labs(
+    title = "Breakdown of Factors Leading to High Success Prediction", 
+    x = "Parental Level of Education", 
+    #find more info on what this actually represents
+    y = "Average"
+  )
+
+
+# Plot for low probability row
+low_prob_plot <- plot(low_prob_breakdown) +
+  theme_minimal() +  # Clean minimal theme
+  theme(
+    legend.position = "NULL",         
+    plot.background = element_rect(fill = "gray90", color = NA), # Gray plot background
+    panel.background = element_rect(fill = "gray90", color = NA), # Gray panel background
+    panel.grid.major = element_line(color = "gray80"),            # Light gray grid lines
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(hjust = 0.5, size = 14),  # Center and resize the title
+    plot.margin = margin(10, 20, 10, 20),
+    axis.title.x = element_text(margin = margin(t = 20)), 
+    axis.title.y = element_text(margin = margin(r = 5)),
+    axis.text.x = element_text(margin = margin(t = 15), size = 8),# Adjust the plot margins (top, right, bottom, left)
+
+  
+  ) + 
+  labs(
+    title = "Breakdown of Factors Leading to Low Success Prediction", 
+    x = "Parental Level of Education", 
+    #find more info on what this actually represents
+    y = "Average"
+  ) 
+
+
+# Display the plots
+print(high_prob_plot)
+print(low_prob_plot)
+```
+
+
+
+
+```{r}
+#Single Drivers
+
+
+#cat( paste('examine_driver_Ycat(Success=="Yes" ~',names(TEST),', data=TEST)\n' ))
+
+examine_driver_Ycat(Success=="Yes" ~ gender , data=Students_Performance)
+examine_driver_Ycat(Success=="Yes" ~ race.ethnicity , data=Students_Performance)
+examine_driver_Ycat(Success=="Yes" ~ parental.level.of.education , data=Students_Performance)
+examine_driver_Ycat(Success=="Yes" ~ lunch , data=Students_Performance)
+examine_driver_Ycat(Success=="Yes" ~ test.preparation.course , data=Students_Performance)
+
+
+
+
+```
+
+
