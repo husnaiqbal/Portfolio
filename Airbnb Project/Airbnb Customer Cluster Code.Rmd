@@ -72,30 +72,6 @@ listings$host_acceptance_rate[is.na(listings$host_acceptance_rate)] <- mean(list
 scale_listings <- scale_dataframe(listings)
 head(scale_listings)
 
-#listings_scaled <- listings
-
-#listings_scaled$price <- log10(listings_scaled$price+1)
-#listings_scaled$number_of_reviews <- log10(listings_scaled$number_of_reviews+1)
-#listings_scaled$accommodates <- log10(listings_scaled$accommodates+1)
-#listings_scaled$bathrooms <- log10(listings_scaled$bathrooms+1)
-#listings_scaled$bedrooms <- log10(listings_scaled$bedrooms+1)
-#listings_scaled$bathrooms <- log10(listings_scaled$bathrooms+1)
-#listings_scaled$beds <- (log10(listings_scaled$beds+1))
-#listings_scaled$minimum_nights <- log10(listings_scaled$minimum_nights+1)
-#listings_scaled$host_total_listings_count <- log10(listings_scaled$host_total_listings_count+1)
-
-
-#hist(log10(listings$price+1))
-#hist(log10(listings$number_of_reviews+1))
-#hist(log10(listings$accommodates+1))
-#hist(log10(listings$bathrooms+1))
-#hist(log10(listings$bedrooms+1))
-#hist(log10(listings$beds+1))
-#hist(log10(listings$minimum_nights+1))
-#hist(listings$overall_rating)
-#hist(listings$host_response_rate)
-#hist(listings$host_acceptance_rate)
-#hist(log10(listings$host_total_listings_count+1))
 
 plot(price~number_of_reviews, data = listings)
 plot(price~overall_rating, data = listings)
@@ -144,18 +120,6 @@ holdout_x$overall_rating[is.na(holdout_x$overall_rating)] <- mean(holdout_x$over
 holdout_x$host_response_rate[is.na(holdout_x$host_response_rate)] <- mean(holdout_x$host_response_rate, na.rm = TRUE)
 holdout_x$host_acceptance_rate[is.na(holdout_x$host_acceptance_rate)] <- mean(holdout_x$host_acceptance_rate, na.rm = TRUE)
 
-
-
-
-#holdout_x$price <- log10(holdout_x$price+1)
-#holdout_x$number_of_reviews <- log10(holdout_x$number_of_reviews+1)
-#holdout_x$accommodates <- log10(holdout_x$accommodates+1)
-#holdout_x$bathrooms <- log10(holdout_x$bathrooms+1)
-#holdout_x$bedrooms <- log10(holdout_x$bedrooms+1)
-#holdout_x$bathrooms <- log10(holdout_x$bathrooms+1)
-#holdout_x$beds <- (log10(holdout_x$beds+1))
-#holdout_x$minimum_nights <- log10(holdout_x$minimum_nights+1)
-#holdout_x$host_total_listings_count <- log10(holdout_x$host_total_listings_count+1)
 
 
 ```
@@ -360,12 +324,6 @@ recipe <- recipe(price ~ ., data = listings) %>%
   step_lincomb()
 
 
-#%>%
-  #step_meanimpute(all_numeric()) %>%
-  #step_modeimpute(all_nominal())
-
-
-
 recipe
 
 ```
@@ -425,7 +383,6 @@ vip(lr_fit)
 
 # dont share data cleaning
 
-#gives me error any time i use holdout_x as the new data as well as listings_test... what to do?
 predictions <- predict(lr_fit, new_data = holdout_x)
 
 
@@ -437,28 +394,15 @@ adhoc <- lr_fit %>%
   #purpose of bind cols - adds - diff from join bc doesnt line up rows but assumes order correct
 write.csv(adhoc,"linear regression.csv", row.names = FALSE)
 
-# fill NA with avg price in train 
- # adhoc$price[is.na(holdout_x$price)] = mean(listings$train)
 
- # to prevetn NA make sure no NA in holdout 
-#  apply same cleaning as trainign data
  colSums(is.na(holdout_x))
  
 
-# rmse
-# price column does not exist 
-# metrics(adhoc, truth = price, estimate = .pred)
 
 
 ```
 
 ```{r}
-
-# try linear reg glmnet engine regression next
-
-# recipe %>%
- #  prep()
-
 
 
 # set up glmnet model
