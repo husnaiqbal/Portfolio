@@ -1,5 +1,5 @@
 ---
-title: "Case 8"
+title: "Analyzing Student Success"
 output: html_document
 date: "2024-11-13"
 ---
