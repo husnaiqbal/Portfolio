@@ -1,5 +1,5 @@
 
-**Analyzing Student Success**
+**Student Success: A Data-Driven Perspective**
 
 This project explores the factors that drive student academic success using a combination of machine learning, interpretability techniques, and data visualization. Only 18.8% of students in the dataset are classified as "successful"—defined as scoring above 75 in reading, writing, and math.
 
