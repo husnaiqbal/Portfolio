@@ -8,9 +8,6 @@ library(DT)
 # Load required data
 load("UPDATED-MOVIERECFall2024.RData")  # Ensure POPULARITY and TRANS exist in this file
 
-
-
-
 # Define UI
 ui <- fluidPage(
   
@@ -197,15 +194,6 @@ server <- function(input, output, session) {
     #  * maxtime=0 ensures algorithm finishes and all recommendations are found
     #  * verbose=FALSE just makes it so we don't get buried in output
     
-    
-    
-    
-    
-    
-    
-    
-  
-  
   
   # Display selected games
   output$selected_movies <- renderText({
