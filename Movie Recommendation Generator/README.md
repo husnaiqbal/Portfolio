@@ -1,5 +1,5 @@
 
-**🎬 Movie Recommendation Generator**
+**Movie Recommendation Generator**
 
 This interactive Shiny app is a rule-based movie recommendation system that generates personalized suggestions based on the user’s selected preferences and viewing history. Built using the arules package, it utilizes association rule mining to recommend movies similar to the ones the user already enjoys, filtering out overly popular or undesired titles to enhance personalization.
 
@@ -25,7 +25,6 @@ Users can:
 
 The app generates recommendations using association rules mined from a transaction dataset (TRANS), ensuring all suggestions meet the specified confidence level and fall within the desired constraints. The output is displayed in an interactive table showing the movie title, confidence score, user rating data, genre, and release year.
 
-This tool is ideal for cinephiles who enjoy niche or high-quality recommendations that go beyond mainstream popularity, offering a data-driven way to discover new films aligned with user taste.
 
 Link to Movie Recommendation Generator: https://husnaiqbal.shinyapps.io/MovieRecs/ 
 
