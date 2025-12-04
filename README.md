@@ -1,7 +1,7 @@
 
 Hi everyone!
 
-My name is Husna Iqbal, and I am a graduating senior at the University of Tennessee - Knoxville. I am majoring in Business Analytics with an Information Management Collateral. I invite you to explore some of the projects I have worked on throughout my academic career thus far. 
+My name is Husna Iqbal, and I am a graduate of The University of Tennessee - Knoxville. I majored in Business Analytics with an Information Management Collateral. I invite you to explore some of the projects I have worked on throughout undergrad. 
 
 
 I have created a Potfolio website through Hugging Face that displays some of my projects in a more easy to read and understand manner. 
